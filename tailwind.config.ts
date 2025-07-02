@@ -18,7 +18,22 @@ export default {
 			}
 		},
 		extend: {
+			backgroundImage: {
+				'gradient-instagram': 'var(--gradient-instagram)',
+				'gradient-instagram-subtle': 'var(--gradient-instagram-subtle)',
+			},
+			boxShadow: {
+				'instagram': 'var(--shadow-instagram)',
+				'glow': 'var(--shadow-glow)',
+			},
 			colors: {
+				instagram: {
+					blue: 'hsl(var(--instagram-blue))',
+					purple: 'hsl(var(--instagram-purple))',
+					pink: 'hsl(var(--instagram-pink))',
+					orange: 'hsl(var(--instagram-orange))',
+					yellow: 'hsl(var(--instagram-yellow))',
+				},
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
