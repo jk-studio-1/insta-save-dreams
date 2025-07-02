@@ -4,7 +4,7 @@ const Footer = () => {
       <div className="max-w-4xl mx-auto text-center space-y-4">
         <div className="flex items-center justify-center gap-2">
           <span className="text-sm text-muted-foreground">
-            ⚠️ Insta Save não é afiliado ao Instagram™.
+            ⚠️ Insta Love não é afiliado ao Instagram™.
           </span>
         </div>
         <p className="text-xs text-muted-foreground max-w-2xl mx-auto">
@@ -12,7 +12,7 @@ const Footer = () => {
           Respeitamos a privacidade - conteúdo público disponível somente.
         </p>
         <p className="text-xs text-muted-foreground">
-          © 2024 Insta Save. Ferramenta educacional e de uso pessoal.
+          © 2024 Insta Love. Ferramenta educacional e de uso pessoal.
         </p>
       </div>
     </footer>

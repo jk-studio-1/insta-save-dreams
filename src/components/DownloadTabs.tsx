@@ -4,12 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Video, Play, User, MessageCircle, Download, Link, Clipboard } from "lucide-react";
+import { Camera, Video, Play, User, MessageCircle, Download, Link, Clipboard, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const DownloadTabs = () => {
   const [url, setUrl] = useState("");
   const [selectedResolution, setSelectedResolution] = useState("1080p");
+  const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
 
   const resolutions = ["480p", "720p", "1080p"];
@@ -31,7 +33,7 @@ const DownloadTabs = () => {
     }
   };
 
-  const handleDownload = (type: string) => {
+  const handleDownload = async (type: string) => {
     if (!url) {
       toast({
         title: "URL necessária",
@@ -41,10 +43,63 @@ const DownloadTabs = () => {
       return;
     }
 
-    toast({
-      title: "Download iniciado!",
-      description: `Baixando ${type} em ${selectedResolution}...`,
-    });
+    // Validate Instagram URL
+    const instagramRegex = /^https?:\/\/(www\.)?(instagram\.com|instagr\.am)\/(p|reel|tv)\/[A-Za-z0-9_-]+/;
+    if (!instagramRegex.test(url)) {
+      toast({
+        title: "URL inválida",
+        description: "Por favor, insira um URL válido do Instagram.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDownloading(true);
+    
+    try {
+      toast({
+        title: "Processando...",
+        description: "Extraindo mídia do Instagram...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('instagram-download', {
+        body: { url, type, resolution: selectedResolution }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      // Create blob URL and trigger download
+      const blob = new Blob([data], { 
+        type: type === 'foto' ? 'image/jpeg' : 'video/mp4' 
+      });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      
+      // Create temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `instagram_${type}_${Date.now()}.${type === 'foto' ? 'jpg' : 'mp4'}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      toast({
+        title: "Download concluído!",
+        description: `${type} baixado com sucesso!`,
+      });
+
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Erro no download",
+        description: error.message || "Falha ao baixar. Verifique se o URL está correto e se o post é público.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const tabs = [
@@ -167,10 +222,15 @@ const DownloadTabs = () => {
                   variant="secondary"
                   size="lg"
                   className="w-full bg-white text-instagram-purple hover:bg-white/90 font-semibold"
+                  disabled={isDownloading}
                 >
-                  <Download className="w-4 h-4 mr-2" />
-                  Baixar {tab.label}
-                  {(tab.id === "video" || tab.id === "reels") && ` (${selectedResolution})`}
+                  {isDownloading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  {isDownloading ? "Baixando..." : `Baixar ${tab.label}`}
+                  {(tab.id === "video" || tab.id === "reels") && !isDownloading && ` (${selectedResolution})`}
                 </Button>
               </CardContent>
             </Card>

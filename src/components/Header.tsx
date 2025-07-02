@@ -11,7 +11,7 @@ const Header = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold bg-gradient-instagram bg-clip-text text-transparent">
-              Insta Save
+              Insta Love
             </h1>
             <p className="text-sm text-muted-foreground">Downloader gratuito</p>
           </div>

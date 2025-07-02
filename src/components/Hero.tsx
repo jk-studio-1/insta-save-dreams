@@ -3,7 +3,7 @@ const Hero = () => {
     <section className="w-full py-16 px-6 text-center">
       <div className="max-w-4xl mx-auto space-y-6">
         <h1 className="text-4xl md:text-6xl font-bold bg-gradient-instagram bg-clip-text text-transparent">
-          Insta Save: Baixar do Instagram
+          Insta Love: Baixar do Instagram
         </h1>
         <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
           Use o Downloader for Instagram para salvar fotos e vídeos de sua conta ou qualquer outra pública.
