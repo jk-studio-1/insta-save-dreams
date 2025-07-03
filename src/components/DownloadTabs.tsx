@@ -62,18 +62,51 @@ const DownloadTabs = () => {
         description: "Extraindo mídia do Instagram...",
       });
 
+      console.log('🚀 Iniciando download para:', url);
+
       const { data, error } = await supabase.functions.invoke('instagram-download', {
         body: { url, type, resolution: selectedResolution }
       });
 
+      console.log('📥 Resposta da função:', { data, error });
+
       if (error) {
-        throw new Error(error.message);
+        console.error('❌ Erro da função:', error);
+        throw new Error(error.message || 'Erro ao processar solicitação');
       }
 
-      // Create blob URL and trigger download
-      const blob = new Blob([data], { 
-        type: type === 'foto' ? 'image/jpeg' : 'video/mp4' 
-      });
+      // Check if data is a valid response
+      if (!data) {
+        throw new Error('Nenhum dado retornado da função');
+      }
+
+      // If data is an error object (returned as successful response but contains error)
+      if (data.error) {
+        console.error('❌ Erro retornado na resposta:', data);
+        throw new Error(data.error);
+      }
+
+      console.log('✅ Dados recebidos:', data);
+
+      // Create blob from the response
+      let blob;
+      if (data instanceof ArrayBuffer) {
+        blob = new Blob([data], { 
+          type: type === 'foto' ? 'image/jpeg' : 'video/mp4' 
+        });
+      } else {
+        // If data is not ArrayBuffer, try to convert it
+        blob = new Blob([data], { 
+          type: type === 'foto' ? 'image/jpeg' : 'video/mp4' 
+        });
+      }
+
+      console.log('📦 Blob criado:', blob.size, 'bytes');
+
+      if (blob.size === 0) {
+        throw new Error('Arquivo baixado está vazio');
+      }
+
       const downloadUrl = window.URL.createObjectURL(blob);
       
       // Create temporary link and trigger download
@@ -85,13 +118,15 @@ const DownloadTabs = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
 
+      console.log('✅ Download iniciado com sucesso');
+
       toast({
         title: "Download concluído!",
         description: `${type} baixado com sucesso!`,
       });
 
     } catch (error) {
-      console.error('Download error:', error);
+      console.error('💥 Erro no download:', error);
       toast({
         title: "Erro no download",
         description: error.message || "Falha ao baixar. Verifique se o URL está correto e se o post é público.",

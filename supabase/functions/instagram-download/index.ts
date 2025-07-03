@@ -103,46 +103,79 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🚀 Iniciando função instagram-download');
+    
     const { url, type } = await req.json();
     
-    console.log('Processing Instagram URL:', url);
+    console.log('📥 URL recebida:', url);
+    console.log('📥 Tipo solicitado:', type);
     
     // Validate Instagram URL
     const instagramRegex = /^https?:\/\/(www\.)?(instagram\.com|instagr\.am)\/(p|reel|tv)\/[A-Za-z0-9_-]+/;
     if (!instagramRegex.test(url)) {
-      throw new Error('URL do Instagram inválida');
+      console.error('❌ URL inválida:', url);
+      return new Response(
+        JSON.stringify({ 
+          error: 'URL do Instagram inválida',
+          details: 'Por favor, forneça um URL válido do Instagram'
+        }), 
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
+    console.log('✅ URL validada com sucesso');
+
     const mediaInfo = await extractInstagramMedia(url);
+    console.log('📸 Mídia extraída:', mediaInfo);
     
     // Fetch the actual media file
+    console.log('⬇️ Baixando arquivo de mídia...');
     const mediaResponse = await fetch(mediaInfo.url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15'
       }
     });
     
     if (!mediaResponse.ok) {
-      throw new Error('Falha ao baixar o arquivo de mídia');
+      console.error('❌ Falha ao baixar mídia:', mediaResponse.status, mediaResponse.statusText);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Falha ao baixar o arquivo de mídia',
+          details: `Status: ${mediaResponse.status} - ${mediaResponse.statusText}`
+        }), 
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
     
-    const mediaBlob = await mediaResponse.blob();
+    const mediaBlob = await mediaResponse.arrayBuffer();
     const contentType = mediaInfo.type === 'video' ? 'video/mp4' : 'image/jpeg';
+    
+    console.log('✅ Download concluído. Tamanho:', mediaBlob.byteLength, 'bytes');
     
     return new Response(mediaBlob, {
       headers: {
         ...corsHeaders,
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${mediaInfo.filename}"`,
+        'Content-Length': mediaBlob.byteLength.toString()
       },
     });
     
   } catch (error) {
-    console.error('Error in instagram-download function:', error);
+    console.error('💥 Erro na função instagram-download:', error);
+    console.error('Stack trace:', error.stack);
+    
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Erro interno do servidor',
-        details: 'Verifique se o URL está correto e se o post é público'
+        details: 'Verifique se o URL está correto e se o post é público',
+        timestamp: new Date().toISOString()
       }), 
       { 
         status: 500, 
