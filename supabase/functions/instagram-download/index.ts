@@ -14,102 +14,136 @@ interface InstagramMediaInfo {
 
 async function extractInstagramMediaFromAPI(instagramUrl: string): Promise<InstagramMediaInfo> {
   try {
-    console.log('🔍 Usando API externa para:', instagramUrl);
+    console.log('🔍 Usando API externa robusta para:', instagramUrl);
     
-    // Try saveig.app API first
+    // Try RapidAPI Instagram Downloader (mais confiável)
     try {
-      console.log('🔄 Tentando saveig.app API');
-      const saveigResponse = await fetch('https://saveig.app/api/ajaxSearch', {
+      console.log('🔄 Tentando RapidAPI Instagram Downloader');
+      const rapidResponse = await fetch('https://instagram-downloader-download-instagram-videos-stories.p.rapidapi.com/index', {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': 'demo', // Using demo key, user can upgrade
+          'X-RapidAPI-Host': 'instagram-downloader-download-instagram-videos-stories.p.rapidapi.com',
+          'url': instagramUrl
+        }
+      });
+
+      if (rapidResponse.ok) {
+        const result = await rapidResponse.json();
+        console.log('📦 Resposta RapidAPI:', result);
+        
+        if (result.media && result.media.length > 0) {
+          const media = result.media[0];
+          console.log('✅ Mídia encontrada via RapidAPI');
+          return {
+            url: media.url,
+            type: media.type === 'video' ? 'video' : 'photo',
+            filename: `instagram_${media.type}_${Date.now()}.${media.type === 'video' ? 'mp4' : 'jpg'}`
+          };
+        }
+      }
+    } catch (e) {
+      console.log('❌ RapidAPI falhou:', e.message);
+    }
+
+    // Try InstaDL API (grátis e confiável)
+    try {
+      console.log('🔄 Tentando InstaDL API');
+      const instadlResponse = await fetch(`https://api.instadl.co/download?url=${encodeURIComponent(instagramUrl)}`, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      if (instadlResponse.ok) {
+        const result = await instadlResponse.json();
+        console.log('📦 Resposta InstaDL:', result);
+        
+        if (result.success && result.data && result.data.download_url) {
+          console.log('✅ Mídia encontrada via InstaDL');
+          return {
+            url: result.data.download_url,
+            type: result.data.type === 'video' ? 'video' : 'photo',
+            filename: `instagram_${result.data.type}_${Date.now()}.${result.data.type === 'video' ? 'mp4' : 'jpg'}`
+          };
+        }
+      }
+    } catch (e) {
+      console.log('❌ InstaDL falhou:', e.message);
+    }
+
+    // Try YTDLPServer API (baseado em yt-dlp, muito confiável)
+    try {
+      console.log('🔄 Tentando YTDLPServer API');
+      const ytdlpResponse = await fetch('https://api.cobalt.tools/api/json', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        body: JSON.stringify({
+          url: instagramUrl,
+          vQuality: "720",
+          aFormat: "best",
+          filenamePattern: "pretty",
+          isAudioOnly: false,
+          isTTFullAudio: false
+        })
+      });
+
+      if (ytdlpResponse.ok) {
+        const result = await ytdlpResponse.json();
+        console.log('📦 Resposta Cobalt:', result);
+        
+        if (result.status === 'success' && result.url) {
+          console.log('✅ Mídia encontrada via Cobalt Tools');
+          return {
+            url: result.url,
+            type: result.url.includes('.mp4') ? 'video' : 'photo',
+            filename: `instagram_download_${Date.now()}.${result.url.includes('.mp4') ? 'mp4' : 'jpg'}`
+          };
+        }
+      }
+    } catch (e) {
+      console.log('❌ Cobalt Tools falhou:', e.message);
+    }
+
+    // Try DownloadGram API
+    try {
+      console.log('🔄 Tentando DownloadGram API');
+      const downloadgramResponse = await fetch('https://downloadgram.com/api.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://downloadgram.com/'
         },
-        body: `q=${encodeURIComponent(instagramUrl)}&t=media&lang=en`
+        body: `url=${encodeURIComponent(instagramUrl)}`
       });
 
-      if (saveigResponse.ok) {
-        const result = await saveigResponse.json();
-        console.log('📦 Resposta saveig:', result);
+      if (downloadgramResponse.ok) {
+        const text = await downloadgramResponse.text();
+        console.log('📦 Resposta DownloadGram (texto):', text.substring(0, 200));
         
-        if (result.status === 'ok' && result.data) {
-          const media = result.data[0];
-          if (media) {
-            console.log('✅ Mídia encontrada via saveig.app');
-            return {
-              url: media.url,
-              type: media.type === 'video' ? 'video' : 'photo',
-              filename: `instagram_${media.type}_${Date.now()}.${media.type === 'video' ? 'mp4' : 'jpg'}`
-            };
-          }
+        // Parse HTML response to extract download link
+        const urlMatch = text.match(/https:\/\/[^"'>\s]+\.(?:jpg|jpeg|png|mp4|webm)/i);
+        if (urlMatch) {
+          const downloadUrl = urlMatch[0];
+          console.log('✅ Mídia encontrada via DownloadGram');
+          return {
+            url: downloadUrl,
+            type: downloadUrl.includes('.mp4') || downloadUrl.includes('.webm') ? 'video' : 'photo',
+            filename: `instagram_downloadgram_${Date.now()}.${downloadUrl.includes('.mp4') || downloadUrl.includes('.webm') ? 'mp4' : 'jpg'}`
+          };
         }
       }
     } catch (e) {
-      console.log('❌ saveig.app falhou:', e.message);
+      console.log('❌ DownloadGram falhou:', e.message);
     }
 
-    // Try snapinsta.app API as fallback
-    try {
-      console.log('🔄 Tentando snapinsta.app API');
-      const snapResponse = await fetch('https://snapinsta.app/api/ajaxSearch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
-        body: `q=${encodeURIComponent(instagramUrl)}&t=media&lang=en`
-      });
-
-      if (snapResponse.ok) {
-        const result = await snapResponse.json();
-        console.log('📦 Resposta snapinsta:', result);
-        
-        if (result.status === 'ok' && result.data) {
-          const media = result.data[0];
-          if (media) {
-            console.log('✅ Mídia encontrada via snapinsta.app');
-            return {
-              url: media.url,
-              type: media.type === 'video' ? 'video' : 'photo',
-              filename: `instagram_${media.type}_${Date.now()}.${media.type === 'video' ? 'mp4' : 'jpg'}`
-            };
-          }
-        }
-      }
-    } catch (e) {
-      console.log('❌ snapinsta.app falhou:', e.message);
-    }
-
-    // Try direct Instagram media extraction as final fallback
-    console.log('🔄 Tentando extração direta como último recurso');
-    const postIdMatch = instagramUrl.match(/\/p\/([A-Za-z0-9_-]+)/);
-    const reelIdMatch = instagramUrl.match(/\/reel\/([A-Za-z0-9_-]+)/);
-    const tvIdMatch = instagramUrl.match(/\/tv\/([A-Za-z0-9_-]+)/);
-    
-    const postId = postIdMatch?.[1] || reelIdMatch?.[1] || tvIdMatch?.[1];
-    
-    if (postId) {
-      const directUrl = `https://www.instagram.com/p/${postId}/media/?size=l`;
-      const response = await fetch(directUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15',
-          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-          'Referer': 'https://www.instagram.com/',
-        },
-        redirect: 'follow'
-      });
-      
-      if (response.ok && response.headers.get('content-type')?.includes('image')) {
-        console.log('✅ Imagem encontrada via endpoint direto');
-        return {
-          url: response.url,
-          type: 'photo',
-          filename: `instagram_photo_${postId}.jpg`
-        };
-      }
-    }
-    
-    throw new Error('Não foi possível extrair mídia usando nenhuma API disponível');
+    throw new Error('Todas as APIs de download falharam. Tente outro link ou tente novamente mais tarde.');
     
   } catch (error) {
     console.error('💥 Erro ao extrair mídia:', error);
