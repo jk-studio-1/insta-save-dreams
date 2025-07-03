@@ -14,6 +14,8 @@ interface InstagramMediaInfo {
 
 async function extractInstagramMedia(url: string): Promise<InstagramMediaInfo> {
   try {
+    console.log('🔍 Iniciando extração para:', url);
+    
     // Extract post ID from Instagram URL
     const postIdMatch = url.match(/\/p\/([A-Za-z0-9_-]+)/);
     const reelIdMatch = url.match(/\/reel\/([A-Za-z0-9_-]+)/);
@@ -25,74 +27,117 @@ async function extractInstagramMedia(url: string): Promise<InstagramMediaInfo> {
       throw new Error('URL do Instagram inválida');
     }
 
-    console.log('Tentando extrair mídia para post ID:', postId);
+    console.log('📝 Post ID extraído:', postId);
 
-    // Try to fetch Instagram page directly with different user agents
-    const userAgents = [
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    ];
-
-    for (const userAgent of userAgents) {
-      try {
-        console.log('Tentando com User-Agent:', userAgent);
-        const pageResponse = await fetch(url, {
-          headers: {
-            'User-Agent': userAgent,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
+    // Try multiple approaches to get media
+    const approaches = [
+      // Approach 1: Try with oembed API (works for public posts)
+      async () => {
+        try {
+          console.log('🔄 Tentativa 1: oEmbed API');
+          const oembedUrl = `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(url)}&access_token=anonymous`;
+          const response = await fetch(oembedUrl);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.thumbnail_url) {
+              console.log('✅ Thumbnail encontrada via oEmbed');
+              return {
+                url: data.thumbnail_url,
+                type: 'photo',
+                filename: `instagram_photo_${postId}.jpg`
+              };
+            }
           }
-        });
-        
-        if (!pageResponse.ok) {
-          console.log('Resposta não ok:', pageResponse.status);
-          continue;
+        } catch (e) {
+          console.log('❌ oEmbed falhou:', e.message);
         }
-        
-        const html = await pageResponse.text();
-        console.log('HTML obtido, tamanho:', html.length);
-        
-        // Try multiple patterns to extract media URLs
-        const patterns = [
-          /"video_url":"([^"]+)"/,
-          /"display_url":"([^"]+)"/,
-          /og:video" content="([^"]+)"/,
-          /og:image" content="([^"]+)"/,
-          /"src":"([^"]+\.(?:mp4|jpg|jpeg|png))"/,
-          /video_url&quot;:&quot;([^&]+)&quot;/,
-          /display_url&quot;:&quot;([^&]+)&quot;/
-        ];
-        
-        for (const pattern of patterns) {
-          const match = html.match(pattern);
-          if (match) {
-            let mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
-            console.log('URL de mídia encontrada:', mediaUrl);
-            
-            // Determine if it's video or photo based on URL or pattern used
-            const isVideo = mediaUrl.includes('.mp4') || pattern.source.includes('video');
-            
+        return null;
+      },
+
+      // Approach 2: Try with different endpoints
+      async () => {
+        try {
+          console.log('🔄 Tentativa 2: Endpoint direto');
+          const directUrl = `https://www.instagram.com/p/${postId}/media/?size=l`;
+          const response = await fetch(directUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15',
+              'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+              'Referer': 'https://www.instagram.com/',
+            },
+            redirect: 'follow'
+          });
+          
+          if (response.ok && response.headers.get('content-type')?.includes('image')) {
+            console.log('✅ Imagem encontrada via endpoint direto');
             return {
-              url: mediaUrl,
-              type: isVideo ? 'video' : 'photo',
-              filename: `instagram_${isVideo ? 'video' : 'photo'}_${postId}.${isVideo ? 'mp4' : 'jpg'}`
+              url: response.url,
+              type: 'photo',
+              filename: `instagram_photo_${postId}.jpg`
             };
           }
+        } catch (e) {
+          console.log('❌ Endpoint direto falhou:', e.message);
         }
-      } catch (error) {
-        console.log('Erro com user agent:', userAgent, error);
-        continue;
+        return null;
+      },
+
+      // Approach 3: Parse HTML with mobile user agent
+      async () => {
+        try {
+          console.log('🔄 Tentativa 3: Parse HTML mobile');
+          const mobileResponse = await fetch(url, {
+            headers: {
+              'User-Agent': 'Instagram 123.0.0.21.114 (iPhone; CPU iPhone OS 11_4 like Mac OS X; en_US; en-US; scale=2.00; 750x1334) AppleWebKit/605.1.15',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+              'Cache-Control': 'no-cache',
+            }
+          });
+          
+          if (mobileResponse.ok) {
+            const html = await mobileResponse.text();
+            
+            // Look for JSON data in script tags
+            const scriptMatch = html.match(/<script[^>]*>window\._sharedData\s*=\s*({.+?});<\/script>/);
+            if (scriptMatch) {
+              const data = JSON.parse(scriptMatch[1]);
+              const media = data?.entry_data?.PostPage?.[0]?.graphql?.shortcode_media;
+              
+              if (media) {
+                const mediaUrl = media.video_url || media.display_url;
+                if (mediaUrl) {
+                  console.log('✅ Mídia encontrada via _sharedData');
+                  return {
+                    url: mediaUrl,
+                    type: media.video_url ? 'video' : 'photo',
+                    filename: `instagram_${media.video_url ? 'video' : 'photo'}_${postId}.${media.video_url ? 'mp4' : 'jpg'}`
+                  };
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('❌ Parse HTML mobile falhou:', e.message);
+        }
+        return null;
+      }
+    ];
+
+    // Try each approach
+    for (const approach of approaches) {
+      const result = await approach();
+      if (result) {
+        console.log('🎉 Sucesso com abordagem, URL:', result.url);
+        return result;
       }
     }
     
-    throw new Error('Não foi possível extrair mídia do post do Instagram');
+    throw new Error('Não foi possível extrair mídia do post. Verifique se o post é público.');
     
   } catch (error) {
-    console.error('Erro ao extrair mídia do Instagram:', error);
+    console.error('💥 Erro ao extrair mídia:', error);
     throw error;
   }
 }
