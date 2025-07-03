@@ -22,73 +22,77 @@ async function extractInstagramMedia(url: string): Promise<InstagramMediaInfo> {
     const postId = postIdMatch?.[1] || reelIdMatch?.[1] || tvIdMatch?.[1];
     
     if (!postId) {
-      throw new Error('Invalid Instagram URL');
+      throw new Error('URL do Instagram inválida');
     }
 
-    // Use a public API service for Instagram media extraction
-    const apiUrl = `https://instagram-media-downloader.p.rapidapi.com/rapid-instagram.php`;
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `url=${encodeURIComponent(url)}`
-    });
+    console.log('Tentando extrair mídia para post ID:', postId);
 
-    if (!response.ok) {
-      // Fallback: try alternative method by fetching Instagram page directly
-      const pageResponse = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    // Try to fetch Instagram page directly with different user agents
+    const userAgents = [
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    ];
+
+    for (const userAgent of userAgents) {
+      try {
+        console.log('Tentando com User-Agent:', userAgent);
+        const pageResponse = await fetch(url, {
+          headers: {
+            'User-Agent': userAgent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+          }
+        });
+        
+        if (!pageResponse.ok) {
+          console.log('Resposta não ok:', pageResponse.status);
+          continue;
         }
-      });
-      
-      const html = await pageResponse.text();
-      
-      // Extract video URL from page HTML
-      const videoMatch = html.match(/"video_url":"([^"]+)"/);
-      const imageMatch = html.match(/"display_url":"([^"]+)"/);
-      
-      if (videoMatch) {
-        const videoUrl = videoMatch[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
-        return {
-          url: videoUrl,
-          type: 'video',
-          filename: `instagram_video_${postId}.mp4`
-        };
-      } else if (imageMatch) {
-        const imageUrl = imageMatch[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
-        return {
-          url: imageUrl,
-          type: 'photo',
-          filename: `instagram_photo_${postId}.jpg`
-        };
+        
+        const html = await pageResponse.text();
+        console.log('HTML obtido, tamanho:', html.length);
+        
+        // Try multiple patterns to extract media URLs
+        const patterns = [
+          /"video_url":"([^"]+)"/,
+          /"display_url":"([^"]+)"/,
+          /og:video" content="([^"]+)"/,
+          /og:image" content="([^"]+)"/,
+          /"src":"([^"]+\.(?:mp4|jpg|jpeg|png))"/,
+          /video_url&quot;:&quot;([^&]+)&quot;/,
+          /display_url&quot;:&quot;([^&]+)&quot;/
+        ];
+        
+        for (const pattern of patterns) {
+          const match = html.match(pattern);
+          if (match) {
+            let mediaUrl = match[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
+            console.log('URL de mídia encontrada:', mediaUrl);
+            
+            // Determine if it's video or photo based on URL or pattern used
+            const isVideo = mediaUrl.includes('.mp4') || pattern.source.includes('video');
+            
+            return {
+              url: mediaUrl,
+              type: isVideo ? 'video' : 'photo',
+              filename: `instagram_${isVideo ? 'video' : 'photo'}_${postId}.${isVideo ? 'mp4' : 'jpg'}`
+            };
+          }
+        }
+      } catch (error) {
+        console.log('Erro com user agent:', userAgent, error);
+        continue;
       }
-      
-      throw new Error('Could not extract media from Instagram post');
-    }
-
-    const data = await response.json();
-    
-    if (data.video_url) {
-      return {
-        url: data.video_url,
-        type: 'video',
-        filename: `instagram_video_${postId}.mp4`
-      };
-    } else if (data.image_url) {
-      return {
-        url: data.image_url,
-        type: 'photo',
-        filename: `instagram_photo_${postId}.jpg`
-      };
     }
     
-    throw new Error('No media found');
+    throw new Error('Não foi possível extrair mídia do post do Instagram');
     
   } catch (error) {
-    console.error('Error extracting Instagram media:', error);
+    console.error('Erro ao extrair mídia do Instagram:', error);
     throw error;
   }
 }
